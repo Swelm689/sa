@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arcane Survivor - Stylized 2D Minimalistic</title>
+  <style>
+    /* Base Styles & Minimalistic UI */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #faf8f0; color: #333; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+    #gameContainer { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+    #gameCanvas { border: none; background-color: #faf8f0; display: block; width: 100vw; height: 100vh; }
+    .game-ui { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); padding: 10px 20px; background: rgba(255,255,255,0.8); border: 1px solid #ccc; border-radius: 4px; z-index: 10; }
+    .StyletopTerritories { position: absolute; top: 0; left: 90%; transform: translateX(-50%); background: rgba(255,255,255,0.8); padding: 10px; border: 1px solid #ccc; border-radius: 4px; z-index: 10; text-align: center; }
+    #healthBar { width: 200px; height: 20px; background: #eee; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
+    #healthFill { height: 100%; background: #ff6666; transition: width 0.3s ease; }
+    #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.8); padding: 10px 20px; border: 1px solid #ccc; border-radius: 4px; z-index: 10; }
+    #dodgeCooldown { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 100px; height: 10px; background: #ddd; border-radius: 2px; z-index: 11; }
+    #dodgeFill { height: 100%; background: #66ffff; width: 100%; transition: width 0.1s linear; border-radius: 2px; }
+    #cableCooldown { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); width: 100px; height: 10px; background: #ddd; border-radius: 2px; z-index: 11; }
+    #cableFill { height: 100%; background: #a066aa; width: 100%; transition: width 0.1s linear; border-radius: 2px; }
+    #comboCounter { position: absolute; top: 20px; right: 20px; font-size: 24px; color: #aa4400; text-shadow: 1px 1px 1px rgba(255,255,255,0.8); z-index: 10; }
+    #inGameCoinCounter, #mainMenuCoinCounter { position: absolute; background: rgba(255,255,255,0.8); padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 18px; z-index: 10; }
+    #inGameCoinCounter { top: 20px; left: 20px; }
+    #mainMenuCoinCounter { top: 20px; right: 20px; }
+    #shopButton { position: absolute; top: 20px; left: 20px; padding: 10px 15px; background: #6699cc; border: none; color: #fff; border-radius: 4px; cursor: pointer; z-index: 15; display: none; }
+    #shopButton:hover { background: #557aac; }
+    #shopScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 50; }
+    #shopScreen h2 { margin-bottom: 20px; }
+    .shop-option { margin: 10px 0; }
+    .shop-option button { margin-left: 10px; padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
+    .shop-option button:hover { background: #ddd; }
+    #weaponSlots { position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 15; }
+    .weapon-slot { width: 50px; height: 50px; background: #eee; border: 2px solid #ccc; border-radius: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; }
+    .weapon-slot.active { border-color: #66cc66; }
+    .weapon-slot[data-weapon="cable"] { background: #d3a0e0; }
+    .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255,255,255,0.95); z-index: 30; animation: fadeIn 1s ease; }
+    .hidden { display: none; }
+    #mobileControls { position: fixed; bottom: 20px; width: 100%; height: 150px; display: none; touch-action: none; z-index: 100; }
+    #joystickContainer { position: absolute; left: 20px; bottom: 20px; width: 120px; height: 120px; touch-action: none; }
+    #shootZone { position: absolute; right: 0; bottom: 0; width: 50%; height: 100%; touch-action: none; opacity: 0.3; z-index: 99; }
+    #colorSelectionScreen { display: flex; flex-direction: column; align-items: center; }
+    #colorSelectionScreen h2 { margin-bottom: 20px; }
+    #colorMessage { color: #cc3333; margin-top: 10px; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes popIn {
+      0% { transform: scale(0); opacity: 0; }
+      60% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+    .pop-animation { animation: popIn 0.5s ease-out; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div id="gameContainer">
+    <div class="game-ui">
+      <div>
+        Level: <span id="levelValue">1</span>
+        <div>Score: <span id="scoreValue">0</span></div>
+        <div>Health: <span id="healthValue">100</span>%</div>
+        <div id="healthBar"><div id="healthFill"></div></div>
+      </div>
+      <div id="powerupDisplay"></div>
+    </div>
+    <div class="StyletopTerritories" id="topTerritories"></div>
+    <div id="dodgeCooldown"><div id="dodgeFill"></div></div>
+    <div id="cableCooldown"><div id="cableFill"></div></div>
+    <div id="comboCounter"></div>
+    <div id="inGameCoinCounter">Coins: <span id="inGameCoinValue">0</span></div>
+    <button id="shopButton">Shop</button>
+    <div id="weaponSlots">
+      <div class="weapon-slot active" data-weapon="default">1</div>
+      <div class="weapon-slot" data-weapon="bomb">2</div>
+      <div class="weapon-slot" data-weapon="triple">3</div>
+      <div class="weapon-slot" data-weapon="slot4">4</div>
+      <div class="weapon-slot" data-weapon="cable">5</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="controls">Move: WASD/Arrows | Shoot: Left Click | Dodge: Space | Shop: Click "Shop" Button</div>
+    <div id="mobileControls">
+      <div id="joystickContainer"></div>
+      <div id="shootZone"></div>
+    </div>
+    <div id="startScreen" class="screen">
+      <h1>Arcane Survivor</h1>
+      <div id="mainMenuCoinCounter">Coins: <span id="mainMenuCoinValue">0</span></div>
+      <div id="colorSelectionScreen">
+        <h2>Choose Your Color</h2>
+        <label for="colorPicker">Select a color:</label>
+        <input type="color" id="colorPicker" value="#ff0000">
+        <button id="startButton">Start Game</button>
+        <div id="colorMessage"></div>
+      </div>
+    </div>
+    <div id="gameOverScreen" class="screen hidden">
+      <h1>Game Over</h1>
+      <p id="gameOverMessage"></p>
+      <p>Final Score: <span id="finalScore">0</span></p>
+      <button id="restartButton">Play Again</button>
+    </div>
+    <div id="shopScreen" class="screen">
+      <h2>Game Shop</h2>
+      <p>Coins: <span id="shopCoinValue">0</span></p>
+      <div class="shop-option">
+        <span>Upgrade Damage (Stage: <span id="damageStage">0</span>)</span>
+        <button class="shop-purchase" data-item="damage">Buy (10)</button>
+      </div>
+      <div class="shop-option">
+        <span>Upgrade Health (Stage: <span id="healthStage">0</span>)</span>
+        <button class="shop-purchase" data-item="health">Buy (20)</button>
+      </div>
+      <div class="shop-option">
+        <span>Buy Bomb Weapon</span>
+        <button class="shop-purchase" data-item="bomb">Buy (34)</button>
+      </div>
+      <div class="shop-option">
+        <span>Buy Triple Shot</span>
+        <button class="shop-purchase" data-item="triple">Buy (24)</button>
+      </div>
+      <button id="closeShopButton">Close Shop</button>
+    </div>
+  </div>
+  <script>
+    // Base GameObject Class
+    class GameObject {
+      constructor(x, y, radius, color) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.color = color;
+        this.active = true;
+      }
+      draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = shadeColor(this.color, -20);
+        ctx.stroke();
+      }
+      update() {}
+    }
+
+    // Territory Mechanics
+    const territoryCellSize = 50;
+
+    function updateTerritory(player) {
+      if (player.cableActive) {
+        return;
+      }
+      const cellX = Math.floor(player.x / territoryCellSize);
+      const cellY = Math.floor(player.y / territoryCellSize);
+      const cellKey = `${cellX},${cellY}`;
+      
+      // Send trail to server for capture when returning to territory
+      if (player.territory.has(cellKey) && player.trail.length > 0) {
+        socket.emit('captureTerritory', { trail: player.trail });
+        player.trail = [];
+      } else if (!player.territory.has(cellKey)) {
+        if (player.trail.length === 0 || 
+            (player.trail[player.trail.length - 1][0] !== cellX || 
+             player.trail[player.trail.length - 1][1] !== cellY)) {
+          player.trail.push([cellX, cellY]);
+        }
+      }
+    }
+
+    // Utility Functions
+    function shadeColor(color, percent) {
+      let num = parseInt(color.slice(1), 16),
+          amt = Math.round(2.55 * percent),
+          R = (num >> 16) + amt,
+          G = (num >> 8 & 0x00FF) + amt,
+          B = (num & 0x0000FF) + amt;
+      return "#" + (
+        0x1000000 +
+        (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+        (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+        (B < 255 ? B < 1 ? 0 : B : 255)
+      ).toString(16).slice(1);
+    }
+
+    function hexToRgba(hex, alpha) {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    // Player Class
+    class Player extends GameObject {
+      constructor(canvas, color) {
+        super(0, 0, 20, color); // Initial position set by server later
+        this.speed = 5;
+        this.health = 100;
+        this.maxHealth = 100;
+        this.lastShot = 0;
+        this.attackSpeed = 500;
+        this.shield = false;
+        this.dodgeCooldown = 0;
+        this.keys = {};
+        this.moveDirection = { x: 0, y: 0 };
+        this.weapon = 'default';
+        this.canvasWidth = canvas.width;
+        this.canvasHeight = canvas.height;
+        this.cableCooldown = 0;
+        this.cableActive = false;
+        this.cableTarget = null;
+        this.caughtBy = null;
+        this.cableEndTime = 0;
+        this.cableOffset = { x: 0, y: 0 };
+        this.territory = new Set();
+        this.trail = [];
+        this.id = socket.id;
+        this.trailHistory = [];
+        this.speedBoost = 1;
+        this.speedBoostDuration = 0;
+        this.invulnerable = false;
+        this.invulnerabilityEndTime = 0;
+      }
+      updateScreenSize(width, height) {
+        this.canvasWidth = width;
+        this.canvasHeight = height;
+      }
+      handleKeyDown(e) {
+        if (this.caughtBy) return;
+        this.keys[e.key] = true;
+        if (e.key === ' ') this.dodge();
+      }
+      handleKeyUp(e) {
+        if (this.caughtBy) return;
+        this.keys[e.key] = false;
+      }
+      update() {
+        const now = Date.now();
+        if (this.cableCooldown > 0) this.cableCooldown -= 16.67;
+        if (this.cableActive && now > this.cableEndTime) {
+          this.cableActive = false;
+          this.cableTarget = null;
+        }
+        if (this.caughtBy && now > this.cableEndTime) this.caughtBy = null;
+        if (this.invulnerable && now > this.invulnerabilityEndTime) {
+          this.invulnerable = false;
+        }
+        if (this.caughtBy) {
+          let catcher = remotePlayers[this.caughtBy] || (game.player.id === this.caughtBy ? game.player : null);
+          if (catcher) {
+            this.x = catcher.x + this.cableOffset.x;
+            this.y = catcher.y + this.cableOffset.y;
+          }
+          return;
+        }
+        if (!/Mobi|Android/i.test(navigator.userAgent)) {
+          this.moveDirection = { x: 0, y: 0 };
+          if (this.keys['ArrowLeft'] || this.keys['a']) this.moveDirection.x = -1;
+          if (this.keys['ArrowRight'] || this.keys['d']) this.moveDirection.x = 1;
+          if (this.keys['ArrowUp'] || this.keys['w']) this.moveDirection.y = -1;
+          if (this.keys['ArrowDown'] || this.keys['s']) this.moveDirection.y = 1;
+          const mag = Math.sqrt(this.moveDirection.x ** 2 + this.moveDirection.y ** 2);
+          if (mag > 0) {
+            this.moveDirection.x /= mag;
+            this.moveDirection.y /= mag;
+          }
+        }
+        this.trailHistory.push({ x: this.x, y: this.y, time: now });
+        if (this.trailHistory.length > 10) this.trailHistory.shift();
+        this.x += this.moveDirection.x * this.speed * this.speedBoost;
+        this.y += this.moveDirection.y * this.speed * this.speedBoost;
+        if (this.dodgeCooldown > 0) this.dodgeCooldown -= 16.67;
+        if (this.speedBoostDuration > 0) {
+          this.speedBoostDuration -= 16.67;
+          if (this.speedBoostDuration <= 0) {
+            this.speedBoost = 1;
+          }
+        }
+        this.x = Math.max(0, Math.min(game.worldWidth, this.x));
+        this.y = Math.max(0, Math.min(game.worldHeight, this.y));
+        updateTerritory(this);
+      }
+      dodge() {
+        if (this.dodgeCooldown <= 0) {
+          this.x += this.moveDirection.x * 50;
+          this.y += this.moveDirection.y * 50;
+          this.dodgeCooldown = 3000 + 9000; // Increased by 9 seconds
+          this.speedBoost = 1.5;
+          this.speedBoostDuration = 2000; // 2 seconds boost
+          game.soundManager.dashWoosh();
+          document.getElementById('gameCanvas').classList.add('pop-animation');
+          setTimeout(() => document.getElementById('gameCanvas').classList.remove('pop-animation'), 500);
+        }
+      }
+      shoot(targetX, targetY) {
+        const now = Date.now();
+        if (now - this.lastShot < this.attackSpeed || this.caughtBy) return;
+        this.lastShot = now;
+        const angle = Math.atan2(targetY - this.y, targetX - this.x);
+        let projectile;
+        if (this.weapon === 'default') {
+          projectile = new Projectile(this.x, this.y, Math.cos(angle) * 10, Math.sin(angle) * 10, 'default', game.player.id);
+        } else if (this.weapon === 'bomb') {
+          projectile = new Projectile(this.x, this.y, 0, 5, 'bomb', game.player.id);
+        } else if (this.weapon === 'triple') {
+          projectile = new Projectile(this.x, this.y, Math.cos(angle - 0.1) * 10, Math.sin(angle - 0.1) * 10, 'triple', game.player.id);
+          game.projectiles.push(projectile);
+          projectile = new Projectile(this.x, this.y, Math.cos(angle) * 10, Math.sin(angle) * 10, 'triple', game.player.id);
+          game.projectiles.push(projectile);
+          projectile = new Projectile(this.x, this.y, Math.cos(angle + 0.1) * 10, Math.sin(angle + 0.1) * 10, 'triple', game.player.id);
+        } else if (this.weapon === 'cable') {
+          if (this.cableCooldown <= 0) {
+            projectile = new Projectile(this.x, this.y, Math.cos(angle) * 10, Math.sin(angle) * 10, 'cable', game.player.id);
+            this.cableCooldown = 20000; // 20-second cooldown
+          }
+        }
+        if (projectile) {
+          game.projectiles.push(projectile);
+          game.soundManager.magicShot();
+          socket.emit('playerShoot', {
+            x: this.x,
+            y: this.y,
+            dx: projectile.dx,
+            dy: projectile.dy,
+            weaponType: this.weapon,
+            shooterId: game.player.id
+          });
+        }
+      }
+      takeDamage(amount) {
+        if (!this.shield && !this.invulnerable) {
+          this.health = Math.max(0, this.health - amount);
+          game.soundManager.playerDamage();
+        }
+      }
+      draw(ctx) {
+        // Draw trail history
+        for (let i = 0; i < this.trailHistory.length; i++) {
+          const point = this.trailHistory[i];
+          const alpha = (i + 1) / this.trailHistory.length * 0.5;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, this.radius, 0, Math.PI * 2);
+          ctx.fillStyle = hexToRgba(this.color, alpha);
+          ctx.fill();
+        }
+        // Draw player
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = shadeColor(this.color, -20);
+        ctx.stroke();
+        // Draw invulnerability shield if active
+        if (this.invulnerable) {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+          ctx.strokeStyle = '#ffff00';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        // Draw cable if catcher
+        if (this.cableActive && this.cableTarget) {
+          let target = remotePlayers[this.cableTarget] || (game.player.id === this.cableTarget ? game.player : null);
+          if (target) {
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(target.x, target.y);
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        }
+        // Draw cable if caught
+        if (this.caughtBy) {
+          let catcher = remotePlayers[this.caughtBy] || (game.player.id === this.caughtBy ? game.player : null);
+          if (catcher) {
+            ctx.beginPath();
+            ctx.moveTo(catcher.x, catcher.y);
+            ctx.lineTo(this.x, this.y);
+            ctx.strokeStyle = catcher.color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    // Other Classes
+    class Enemy extends GameObject {
+      constructor(x, y, type = 'basic') {
+        super(x, y, 15, '#444');
+        this.type = type;
+        this.speed = this.getSpeed();
+        this.health = this.getHealth();
+        this.maxHealth = this.health;
+        this.radius = Enemy.getRadiusForType(type);
+        this.id = null;
+        this.targetX = x;
+        this.targetY = y;
+        this.scale = 0;
+      }
+      static getRadiusForType(type) {
+        const sizes = { basic: 15, fast: 12, tank: 25, miniBoss: 30, boss: 40 };
+        return sizes[type] || 15;
+      }
+      getSpeed() {
+        const baseSpeeds = { basic: 2, fast: 3.5, tank: 1.5, miniBoss: 2.5, boss: 1.8 };
+        return baseSpeeds[this.type] || 2;
+      }
+      getHealth() {
+        const healthValues = { basic: 1, fast: 1, tank: 5, miniBoss: 50, boss: 100 };
+        return healthValues[this.type] || 1;
+      }
+      update() {
+        if (this.scale < 1) {
+          this.scale += 0.05;
+          if (this.scale > 1) this.scale = 1;
+        }
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.scale, this.scale);
+        ctx.beginPath();
+        if (this.type === 'tank') {
+          ctx.rect(-this.radius, -this.radius, this.radius * 2, this.radius * 2);
+        } else {
+          ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = shadeColor(this.color, -20);
+        ctx.stroke();
+        ctx.restore();
+        if (['tank', 'miniBoss', 'boss'].includes(this.type)) {
+          const barWidth = this.radius * 2;
+          const barHeight = this.type === 'boss' ? 10 : 5;
+          const xOffset = this.x - this.radius;
+          const yOffset = this.y - this.radius - (this.type === 'boss' ? 20 : 10);
+          ctx.save();
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(xOffset - 1, yOffset - 1, barWidth + 2, barHeight + 2);
+          ctx.fillStyle = '#ff6666';
+          const healthFillWidth = (this.health / this.maxHealth) * barWidth;
+          ctx.fillRect(xOffset, yOffset, healthFillWidth, barHeight);
+          if (['boss', 'miniBoss'].includes(this.type)) {
+            ctx.font = 'bold 12px Courier New';
+            ctx.fillStyle = '#333';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${this.health} / ${this.maxHealth}`, this.x, yOffset - 5);
+          }
+          ctx.restore();
+        }
+      }
+    }
+
+    class Projectile extends GameObject {
+      constructor(x, y, dx, dy, weaponType = 'default', shooterId = null) {
+        super(x, y, 5, '#888');
+        this.dx = dx;
+        this.dy = dy;
+        this.weaponType = weaponType;
+        this.shooterId = shooterId;
+        this.rotation = 0;
+        this.rotationSpeed = Math.random() * 0.2 - 0.1;
+        if (weaponType === 'bomb') this.color = '#cc6600';
+        else if (weaponType === 'triple') this.color = '#00cccc';
+        else if (weaponType === 'cable') this.color = '#a066aa';
+      }
+      update() {
+        this.x += this.dx;
+        this.y += this.dy;
+        this.rotation += this.rotationSpeed;
+        if (this.x < 0 || this.x > game.worldWidth || this.y < 0 || this.y > game.worldHeight) {
+          this.active = false;
+        }
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = shadeColor(this.color, -20);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    class Powerup extends GameObject {
+      constructor(x, y) {
+        super(x, y, 10, '#66cc66');
+        this.type = this.randomType();
+        this.color = this.getColor();
+      }
+      randomType() {
+        const types = ['shield', 'rapid', 'speed'];
+        return types[Math.floor(Math.random() * types.length)];
+      }
+      getColor() {
+        return { shield: '#66cc66', rapid: '#cc66cc', speed: '#cccc66' }[this.type];
+      }
+      update() {
+        this.y += 0.2;
+      }
+    }
+
+    class Coin extends GameObject {
+      constructor(x, y) {
+        super(x, y, 8, '#d4af37');
+      }
+      update() {}
+      draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = shadeColor(this.color, -20);
+        ctx.stroke();
+      }
+    }
+
+    class Particle extends GameObject {
+      constructor(x, y) {
+        super(x, y, Math.random() * 3 + 1, `hsl(${Math.random() * 360}, 50%, 50%)`);
+        this.velocity = { x: (Math.random() - 0.5) * 5, y: (Math.random() - 0.5) * 5 };
+        this.alpha = 1;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = Math.random() * 0.2 - 0.1;
+      }
+      update() {
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
+        this.rotation += this.rotationSpeed;
+        this.alpha -= 0.02;
+        this.active = this.alpha > 0;
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    class Flash extends GameObject {
+      constructor(x, y) {
+        super(x, y, 20, '#ffffff');
+        this.alpha = 1;
+      }
+      update() {
+        this.alpha -= 0.05;
+        if (this.alpha <= 0) this.active = false;
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // SoundManager & TouchManager
+    class SoundManager {
+      constructor() {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.gainNode = this.audioContext.createGain();
+        this.gainNode.connect(this.audioContext.destination);
+        this.gainNode.gain.value = 0.5;
+      }
+      magicShot() {}
+      enemyHit() {}
+      powerupCollect() {}
+      playerDamage() {}
+      dashWoosh() {}
+      levelUp() {}
+      coinCollect() {}
+      enemyDeath() {}
+      bombExplosion() {}
+    }
+
+    class TouchManager {
+      constructor() {
+        this.touchStart = { x: 0, y: 0 };
+        this.touchEnd = { x: 0, y: 0 };
+        this.minSwipeDistance = 30;
+        this.joystick = null;
+        if (/Mobi|Android/i.test(navigator.userAgent)) {
+          this.initJoystick();
+          this.initSwipe();
+        }
+      }
+      initJoystick() {
+        this.joystick = nipplejs.create({
+          zone: document.getElementById('joystickContainer'),
+          mode: 'static',
+          position: { left: '10%', top: '50%' },
+          color: '#2196F3',
+          size: 80
+        });
+        this.joystick.on('move', (evt, data) => {
+          game.player.moveDirection.x = data.vector.x;
+          game.player.moveDirection.y = -data.vector.y;
+        });
+        this.joystick.on('end', () => {
+          game.player.moveDirection.x = 0;
+          game.player.moveDirection.y = 0;
+        });
+      }
+      initSwipe() {
+        const shootZone = document.getElementById('shootZone');
+        shootZone.addEventListener('touchstart', e => {
+          this.touchStart = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+        });
+        shootZone.addEventListener('touchend', e => {
+          this.touchEnd = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+          const dx = this.touchEnd.x - this.touchStart.x;
+          const dy = this.touchEnd.y - this.touchStart.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance > this.minSwipeDistance) {
+            const rect = game.canvas.getBoundingClientRect();
+            const targetX = this.touchEnd.x - rect.left;
+            const targetY = this.touchEnd.y - rect.top;
+            game.player.shoot(targetX + game.camera.x, targetY + game.camera.y);
+          }
+        });
+      }
+    }
+
+    // Game Class
+    class Game {
+      constructor() {
+        this.territoryCellSize = 50;
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.bgPattern = this.createBackgroundPattern();
+        this.worldWidth = 9600;
+        this.worldHeight = 7200;
+        this.player = null;
+        this.soundManager = new SoundManager();
+        this.touchManager = new TouchManager();
+        this.weapons = { default: true, bomb: false, triple: false, cable: true };
+        this.upgrades = { damage: 0, health: 0 };
+        this.coins = parseInt(localStorage.getItem('coins')) || 0;
+        document.getElementById('inGameCoinValue').textContent = this.coins;
+        document.getElementById('mainMenuCoinValue').textContent = this.coins;
+        this.camera = { x: 0, y: 0 };
+        this.enemies = [];
+        this.projectiles = [];
+        this.enemyProjectiles = [];
+        this.particles = [];
+        this.powerups = [];
+        this.coinObjects = [];
+        this.lastEnemySpawn = 0;
+        this.score = 0;
+        this.isPaused = false;
+        this.gameOver = false;
+        this.animationId = null;
+        this.currentLevel = 1;
+        this.enemiesDefeated = 0; // Added to track enemy kills for leveling
+        this.enemiesPerLevel = 10; // Number of enemies to defeat per level
+        this.enemySpawnRate = 2000; // Initial spawn rate
+        this.enemySpeedMultiplier = 1.0; // Initial speed multiplier
+        this.activePowerups = [];
+        this.comboCounter = 0;
+        this.lastKillTime = 0;
+        this.setupEventListeners();
+        this.init();
+        setInterval(() => {
+          if (!this.gameOver && !this.isPaused) this.spawnCoin();
+        }, 1000);
+        setInterval(() => {
+          if (!this.isPaused && !this.gameOver) this.updateTopTerritories();
+        }, 1000);
+      }
+      createBackgroundPattern() {
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = 400;
+        offCanvas.height = 400;
+        const offCtx = offCanvas.getContext('2d');
+        offCtx.fillStyle = '#faf8f0';
+        offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height);
+        offCtx.strokeStyle = 'rgba(0,0,0,0.05)';
+        offCtx.lineWidth = 1;
+        for (let x = 0; x < offCanvas.width; x += 50) {
+          offCtx.beginPath();
+          offCtx.moveTo(x, 0);
+          offCtx.lineTo(x, offCanvas.height);
+          offCtx.stroke();
+        }
+        for (let y = 0; y < offCanvas.height; y += 50) {
+          offCtx.beginPath();
+          offCtx.moveTo(0, y);
+          offCtx.lineTo(offCanvas.width, y);
+          offCtx.stroke();
+        }
+        return this.ctx.createPattern(offCanvas, 'repeat');
+      }
+      createFlash(x, y) {
+        this.particles.push(new Flash(x, y));
+      }
+      setupEventListeners() {
+        document.addEventListener('keydown', this.handleKeyDown.bind(this));
+        document.addEventListener('keyup', this.handleKeyUp.bind(this));
+        this.canvas.addEventListener('click', this.handleShoot.bind(this));
+        document.getElementById('restartButton').addEventListener('click', () => this.restart());
+        document.querySelectorAll('.shop-purchase').forEach(btn => btn.addEventListener('click', this.purchaseItem.bind(this)));
+        document.getElementById('shopButton').addEventListener('click', () => this.openShop());
+        document.getElementById('closeShopButton').addEventListener('click', () => this.closeShop());
+        document.getElementById('startButton').addEventListener('click', () => {
+          const color = document.getElementById('colorPicker').value;
+          socket.emit('selectColor', color);
+          document.getElementById('colorMessage').textContent = '';
+        });
+      }
+      init() {
+        this.resizeCanvas();
+        window.addEventListener('resize', this.resizeCanvas.bind(this));
+        this.updateWeaponSlots();
+        document.getElementById('damageStage').textContent = this.upgrades.damage;
+        document.getElementById('healthStage').textContent = this.upgrades.health;
+      }
+      resizeCanvas() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        if (this.player) this.player.updateScreenSize(this.canvas.width, this.canvas.height);
+      }
+      handleKeyDown(e) {
+        if (["1", "2", "3", "4", "5"].includes(e.key)) this.selectWeapon(e.key);
+        if (!this.isPaused && !this.gameOver && this.player) this.player.handleKeyDown(e);
+      }
+      handleKeyUp(e) {
+        if (!this.isPaused && !this.gameOver && this.player) this.player.handleKeyUp(e);
+      }
+      handleShoot(e) {
+        if (this.isPaused || this.gameOver) return;
+        let mouseX, mouseY;
+        const rect = this.canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+        if (this.player) this.player.shoot(mouseX + this.camera.x, mouseY + this.camera.y);
+      }
+      openShop() {
+        this.isPaused = true;
+        document.getElementById('inGameCoinCounter').style.display = 'none';
+        document.getElementById('shopCoinValue').textContent = this.coins;
+        document.getElementById('shopScreen').style.display = 'flex';
+        this.player.invulnerable = true;
+        socket.emit('openShop');
+      }
+      closeShop() {
+        document.getElementById('shopScreen').style.display = 'none';
+        document.getElementById('inGameCoinCounter').style.display = 'block';
+        this.isPaused = false;
+        this.player.invulnerabilityEndTime = Date.now() + 3000; // 3 seconds invulnerability after closing shop
+        socket.emit('closeShop');
+      }
+      purchaseItem(e) {
+        const item = e.target.dataset.item;
+        let cost = 0;
+        if (item === 'damage') cost = 10;
+        else if (item === 'health') cost = 20;
+        else if (item === 'bomb') cost = 34;
+        else if (item === 'triple') cost = 24;
+        if (this.coins >= cost) {
+          this.coins -= cost;
+          if (item === 'damage') {
+            this.upgrades.damage++;
+            document.getElementById('damageStage').textContent = this.upgrades.damage;
+          } else if (item === 'health') {
+            this.upgrades.health++;
+            this.player.maxHealth += 50;
+            this.player.health += 50;
+            document.getElementById('healthStage').textContent = this.upgrades.health;
+          } else if (item === 'bomb') this.weapons.bomb = true;
+          else if (item === 'triple') this.weapons.triple = true;
+          localStorage.setItem('coins', this.coins);
+          document.getElementById('inGameCoinValue').textContent = this.coins;
+          document.getElementById('mainMenuCoinValue').textContent = this.coins;
+          document.getElementById('shopCoinValue').textContent = this.coins;
+          this.updateWeaponSlots();
+        } else alert("Not enough coins!");
+      }
+      updateWeaponSlots() {
+        document.querySelectorAll('.weapon-slot').forEach(slot => {
+          const weapon = slot.dataset.weapon;
+          if (weapon === 'default') slot.classList.add('active');
+          else slot.style.opacity = this.weapons[weapon] ? 1 : 0.5;
+        });
+      }
+      selectWeapon(key) {
+        const mapping = { "1": "default", "2": "bomb", "3": "triple", "4": "slot4", "5": "cable" };
+        const selected = mapping[key];
+        if (selected === "slot4") return;
+        if (selected !== "default" && selected !== "cable" && !this.weapons[selected]) return; // Cable is always available
+        this.player.weapon = selected;
+        document.querySelectorAll('.weapon-slot').forEach(slot => {
+          slot.classList.toggle('active', slot.dataset.weapon === selected);
+        });
+      }
+      spawnCoin() {
+        const x = Math.random() * (this.worldWidth - 20) + 10;
+        const y = Math.random() * (this.worldHeight - 20) + 10;
+        this.coinObjects.push(new Coin(x, y));
+      }
+      updateCamera() {
+        if (!this.player) return;
+        const targetX = this.player.x - this.canvas.width / 2;
+        const targetY = this.player.y - this.canvas.height / 2;
+        this.camera.x += (targetX - this.camera.x) * 0.1;
+        this.camera.y += (targetY - this.camera.y) * 0.1;
+      }
+      getCamera() { return this.camera; }
+      detectCollision(obj1, obj2) {
+        const dx = obj1.x - obj2.x;
+        const dy = obj1.y - obj2.y;
+        return Math.sqrt(dx * dx + dy * dy) < obj1.radius + obj2.radius;
+      }
+      checkCollisions() {
+        this.projectiles.forEach((projectile, pIndex) => {
+          // Check for collisions with enemies
+          this.enemies.forEach(enemy => {
+            if (this.detectCollision(projectile, enemy)) {
+              if (projectile.shooterId === game.player.id) {
+                let damage = 10 + 5 * this.upgrades.damage;
+                if (projectile.weaponType === 'bomb') {
+                  damage = 30 + 15 * this.upgrades.damage;
+                  const explosionRadius = 100;
+                  this.enemies.forEach(en => {
+                    const dx = en.x - projectile.x;
+                    const dy = en.y - projectile.y;
+                    if (Math.sqrt(dx * dx + dy * dy) < explosionRadius) {
+                      socket.emit('enemyHit', { enemyId: en.id, damage });
+                    }
+                  });
+                  this.createExplosion(projectile.x, projectile.y, 20);
+                  this.soundManager.bombExplosion();
+                } else {
+                  socket.emit('enemyHit', { enemyId: enemy.id, damage });
+                }
+              }
+              this.projectiles.splice(pIndex, 1);
+            }
+          });
+
+          // Check for collisions with remote players
+          for (let id in remotePlayers) {
+            const rp = remotePlayers[id];
+            if (this.detectCollision(projectile, rp)) {
+              if (projectile.weaponType === 'cable' && projectile.shooterId === this.player.id && !rp.caughtBy) {
+                // Handle cable catch without damage
+                socket.emit('playerCableCatch', { catcherId: this.player.id, caughtId: id });
+                this.projectiles.splice(pIndex, 1);
+                break;
+              } else if (projectile.shooterId !== id && projectile.weaponType !== 'cable') {
+                // Handle damage for non-cable projectiles only
+                socket.emit('playerHit', { playerId: id, damage: 10 });
+                this.projectiles.splice(pIndex, 1);
+                break;
+              }
+            }
+          }
+
+          // Check for collisions with local player
+          if (this.detectCollision(projectile, this.player) && projectile.shooterId !== this.player.id && projectile.weaponType !== 'cable') {
+            // Only non-cable projectiles cause damage
+            socket.emit('playerHit', { playerId: socket.id, damage: 10 });
+            this.projectiles.splice(pIndex, 1);
+          }
+        });
+
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+          const enemy = this.enemies[i];
+          if (this.detectCollision(enemy, this.player) && !this.player.invulnerable) {
+            const damage = this.player.maxHealth * 0.1;
+            this.player.takeDamage(damage);
+            socket.emit('enemyHit', { enemyId: enemy.id, damage: enemy.health });
+          }
+        }
+        this.powerups.forEach((powerup, index) => {
+          if (this.detectCollision(powerup, this.player)) {
+            this.applyPowerup(powerup);
+            this.powerups.splice(index, 1);
+            this.soundManager.powerupCollect();
+          }
+        });
+        for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+          const projectile = this.enemyProjectiles[i];
+          if (this.detectCollision(projectile, this.player) && !this.player.invulnerable) {
+            const damage = this.player.maxHealth * 0.1;
+            this.player.takeDamage(damage);
+            this.enemyProjectiles.splice(i, 1);
+          }
+        }
+        this.coinObjects.forEach((coin, index) => {
+          if (this.detectCollision(coin, this.player)) {
+            this.coins++;
+            document.getElementById('inGameCoinValue').textContent = this.coins;
+            document.getElementById('mainMenuCoinValue').textContent = this.coins;
+            localStorage.setItem('coins', this.coins);
+            this.coinObjects.splice(index, 1);
+            this.soundManager.coinCollect();
+          }
+        });
+      }
+      createExplosion(x, y, count = 10) {
+        for (let i = 0; i < count; i++) this.particles.push(new Particle(x, y));
+      }
+      applyPowerup(powerup) {
+        const effects = {
+          shield: () => { this.player.shield = true; setTimeout(() => this.player.shield = false, 10000); },
+          rapid: () => { const orig = this.player.attackSpeed; this.player.attackSpeed *= 0.5; setTimeout(() => this.player.attackSpeed = orig, 5000); },
+          speed: () => { const orig = this.player.speed; this.player.speed *= 1.5; setTimeout(() => this.player.speed = orig, 5000); }
+        };
+        effects[powerup.type]();
+        this.activePowerups.push({ type: powerup.type, endTime: Date.now() + 5000 });
+      }
+      update() {
+        if (this.isPaused) return;
+        if (this.player && (this.player.health <= 0 || this.player.territory.size === 0) && !this.gameOver) {
+          this.gameOver = true;
+          this.enemies = [];
+          setTimeout(() => {
+            document.getElementById('finalScore').textContent = this.score;
+            document.getElementById('gameOverMessage').textContent = this.player.health <= 0 ? 'You died!' : 'Your territory was fully captured. Try again!';
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+            cancelAnimationFrame(this.animationId);
+          }, 2000);
+          return;
+        }
+        if (this.player) this.player.update();
+        this.projectiles.forEach(p => p.update());
+        this.enemyProjectiles.forEach(p => p.update());
+        this.particles.forEach(p => p.update());
+        this.powerups.forEach(p => p.update());
+        this.coinObjects.forEach(c => c.update());
+        this.checkCollisions();
+        this.projectiles = this.projectiles.filter(p => p.active);
+        this.enemyProjectiles = this.enemyProjectiles.filter(p => p.active);
+        this.particles = this.particles.filter(p => p.active);
+        this.powerups = this.powerups.filter(p => p.active);
+        if (this.player) {
+          document.getElementById('healthValue').textContent = Math.floor((this.player.health / this.player.maxHealth) * 100);
+          document.getElementById('healthFill').style.width = `${(this.player.health / this.player.maxHealth) * 100}%`;
+          document.getElementById('scoreValue').textContent = this.score;
+          document.getElementById('levelValue').textContent = this.currentLevel;
+          document.getElementById('dodgeFill').style.width = `${(1 - (this.player.dodgeCooldown / 12000)) * 100}%`; // Adjusted for 12 seconds
+          const cableCdPercent = this.player.cableCooldown > 0 ? (1 - (this.player.cableCooldown / 20000)) : 1;
+          document.getElementById('cableFill').style.width = `${cableCdPercent * 100}%`;
+          socket.emit('playerUpdate', {
+            x: this.player.x,
+            y: this.player.y,
+            health: this.player.health,
+            color: this.player.color,
+            cableActive: this.player.cableActive,
+            cableTarget: this.cableTarget,
+            caughtBy: this.caughtBy,
+            territory: Array.from(this.player.territory),
+            trail: this.player.trail
+          });
+        }
+        this.enemies.forEach(e => e.update());
+        if (!this.gameOver && this.enemiesDefeated >= this.enemiesPerLevel) this.levelUp();
+        this.updateCamera();
+      }
+      draw() {
+        const cam = this.camera;
+        this.ctx.save();
+        this.ctx.translate(-cam.x, -cam.y);
+        
+        // Define visibility bounds
+        const margin = 1000;
+        const left = cam.x - margin;
+        const right = cam.x + this.canvas.width + margin;
+        const top = cam.y - margin;
+        const bottom = cam.y + this.canvas.height + margin;
+        const minCellX = Math.floor(left / territoryCellSize);
+        const maxCellX = Math.ceil(right / territoryCellSize);
+        const minCellY = Math.floor(top / territoryCellSize);
+        const maxCellY = Math.ceil(bottom / territoryCellSize);
+
+        // Draw background
+        this.ctx.fillStyle = this.bgPattern;
+        this.ctx.fillRect(cam.x, cam.y, this.canvas.width, this.canvas.height);
+
+        // Draw local player's territory within view
+        if (this.player && this.player.territory) {
+          this.player.territory.forEach(cell => {
+            try {
+              const [cx, cy] = cell.split(',').map(Number);
+              if (cx >= minCellX && cx <= maxCellX && cy >= minCellY && cy <= maxCellY) {
+                this.ctx.fillStyle = hexToRgba(this.player.color, 0.3);
+                this.ctx.fillRect(cx * territoryCellSize, cy * territoryCellSize, territoryCellSize, territoryCellSize);
+              }
+            } catch (e) {}
+          });
+        }
+
+        // Draw remote players' territories within view
+        for (let id in remotePlayers) {
+          const rp = remotePlayers[id];
+          if (rp.territory && rp.color) {
+            rp.territory.forEach(cell => {
+              try {
+                const [cx, cy] = cell.split(',').map(Number);
+                if (cx >= minCellX && cx <= maxCellX && cy >= minCellY && cy <= maxCellY) {
+                  this.ctx.fillStyle = hexToRgba(rp.color, 0.3);
+                  this.ctx.fillRect(cx * territoryCellSize, cy * territoryCellSize, territoryCellSize, territoryCellSize);
+                }
+              } catch (e) {}
+            });
+          }
+        }
+
+        // Draw local player's trail within view
+        if (this.player && this.player.trail) {
+          this.player.trail.forEach(([cx, cy]) => {
+            if (cx >= minCellX && cx <= maxCellX && cy >= minCellY && cy <= maxCellY) {
+              this.ctx.fillStyle = hexToRgba(this.player.color, 0.5);
+              this.ctx.fillRect(cx * territoryCellSize, cy * territoryCellSize, territoryCellSize, territoryCellSize);
+            }
+          });
+        }
+
+        // Draw remote players' trails within view
+        for (let id in remotePlayers) {
+          const rp = remotePlayers[id];
+          if (rp.trail && rp.color) {
+            rp.trail.forEach(([cx, cy]) => {
+              if (cx >= minCellX && cx <= maxCellX && cy >= minCellY && cy <= maxCellY) {
+                this.ctx.fillStyle = hexToRgba(rp.color, 0.5);
+                this.ctx.fillRect(cx * territoryCellSize, cy * territoryCellSize, territoryCellSize, territoryCellSize);
+              }
+            });
+          }
+        }
+
+        // Draw local player
+        if (this.player) this.player.draw(this.ctx);
+
+        // Draw enemies within view
+        this.enemies.forEach(enemy => {
+          if (enemy.x >= left && enemy.x <= right && enemy.y >= top && enemy.y <= bottom) {
+            if (enemy.targetX !== undefined && enemy.targetY !== undefined) {
+              enemy.x += (enemy.targetX - enemy.x) * 0.05;
+              enemy.y += (enemy.targetY - enemy.y) * 0.05;
+            }
+            enemy.draw(this.ctx);
+          }
+        });
+
+        // Draw player projectiles within view
+        this.projectiles.forEach(p => {
+          if (p.x >= left && p.x <= right && p.y >= top && p.y <= bottom) {
+            p.draw(this.ctx);
+          }
+        });
+
+        // Draw enemy projectiles within view
+        this.enemyProjectiles.forEach(p => {
+          if (p.x >= left && p.x <= right && p.y >= top && p.y <= bottom) {
+            p.draw(this.ctx);
+          }
+        });
+
+        // Draw particles within view
+        this.particles.forEach(p => {
+          if (p.x >= left && p.x <= right && p.y >= top && p.y <= bottom) {
+            p.draw(this.ctx);
+          }
+        });
+
+        // Draw powerups within view
+        this.powerups.forEach(p => {
+          if (p.x >= left && p.x <= right && p.y >= top && p.y <= bottom) {
+            p.draw(this.ctx);
+          }
+        });
+
+        // Draw coins within view
+        this.coinObjects.forEach(c => {
+          if (c.x >= left && c.x <= right && c.y >= top && c.y <= bottom) {
+            c.draw(this.ctx);
+          }
+        });
+
+        // Draw shield if active
+        if (this.player && this.player.shield) {
+          this.ctx.beginPath();
+          this.ctx.arc(this.player.x, this.player.y, this.player.radius + 3, 0, Math.PI * 2);
+          this.ctx.strokeStyle = '#66cc66';
+          this.ctx.lineWidth = 2;
+          this.ctx.stroke();
+        }
+
+        // Draw remote players within view (includes cable drawing)
+        for (let id in remotePlayers) {
+          const rp = remotePlayers[id];
+          if (rp.x >= left && rp.x <= right && rp.y >= top && rp.y <= bottom) {
+            if (rp.targetX !== undefined && rp.targetY !== undefined) {
+              rp.x += (rp.targetX - rp.x) * 0.1;
+              rp.y += (rp.targetY - rp.y) * 0.1;
+            }
+            this.ctx.beginPath();
+            this.ctx.arc(rp.x, rp.y, 20, 0, Math.PI * 2);
+            this.ctx.fillStyle = rp.color || '#333';
+            this.ctx.fill();
+            this.ctx.font = "12px Courier New";
+            this.ctx.fillStyle = "#333";
+            this.ctx.fillText(`HP: ${rp.health || 100}`, rp.x - 15, rp.y - 25);
+            // Draw cable if remote player is catcher
+            if (rp.cableActive && rp.cableTarget) {
+              let target = remotePlayers[rp.cableTarget] || (game.player.id === rp.cableTarget ? game.player : null);
+              if (target) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(rp.x, rp.y);
+                this.ctx.lineTo(target.x, target.y);
+                this.ctx.strokeStyle = rp.color;
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+              }
+            }
+            // Draw cable if remote player is caught
+            if (rp.caughtBy) {
+              let catcher = remotePlayers[rp.caughtBy] || (game.player.id === rp.caughtBy ? game.player : null);
+              if (catcher) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(catcher.x, catcher.y);
+                this.ctx.lineTo(rp.x, rp.y);
+                this.ctx.strokeStyle = catcher.color;
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+              }
+            }
+          }
+        }
+
+        this.ctx.restore();
+      }
+      levelUp() {
+        this.currentLevel++;
+        this.enemiesDefeated = 0;
+        this.enemySpawnRate = Math.max(500, this.enemySpawnRate - 200);
+        this.enemySpeedMultiplier += 0.1;
+        this.score += 100;
+        socket.emit('expandTerritory', { enemyType: 'levelUp', K: 5 });
+        this.soundManager.levelUp();
+      }
+      restart() { location.reload(); }
+    }
+
+    // Socket Setup
+    const socket = io();
+    const remotePlayers = {};
+    let playerColor = null;
+
+    socket.on('currentPlayers', (playersData) => {
+      for (let id in playersData) {
+        if (id !== socket.id) {
+          remotePlayers[id] = {
+            ...playersData[id],
+            x: playersData[id].x || 0,
+            y: playersData[id].y || 0,
+            targetX: playersData[id].x || 0,
+            targetY: playersData[id].y || 0,
+            territory: new Set(playersData[id].territory || []),
+            trail: playersData[id].trail || []
+          };
+        }
+      }
+      game.updateTopTerritories();
+    });
+
+    socket.on('newPlayer', ({ id, data }) => {
+      if (id !== socket.id) {
+        remotePlayers[id] = {
+          ...data,
+          x: data.x || 0,
+          y: data.y || 0,
+          targetX: data.x || 0,
+          targetY: data.y || 0,
+          territory: new Set(data.territory || []),
+          trail: data.trail || []
+        };
+        game.updateTopTerritories();
+      }
+    });
+
+    socket.on('playerUpdate', ({ id, data }) => {
+      if (id === socket.id) {
+        if (data.health !== undefined) game.player.health = data.health;
+        if (Array.isArray(data.territory)) game.player.territory = new Set(data.territory);
+        if (data.newCells) {
+          data.newCells.forEach(cell => {
+            const [cx, cy] = cell.split(',').map(Number);
+            const flashX = (cx + 0.5) * territoryCellSize;
+            const flashY = (cy + 0.5) * territoryCellSize;
+            game.createFlash(flashX, flashY);
+          });
+        }
+        return;
+      }
+      if (!remotePlayers[id]) {
+        remotePlayers[id] = {};
+      }
+      const rp = remotePlayers[id];
+      rp.targetX = typeof data.x === 'number' ? data.x : (rp.x || 0);
+      rp.targetY = typeof data.y === 'number' ? data.y : (rp.y || 0);
+      rp.health = typeof data.health === 'number' ? data.health : (rp.health || 100);
+      rp.color = data.color || rp.color || '#333';
+      rp.cableActive = data.cableActive || false;
+      rp.cableTarget = data.cableTarget || null;
+      rp.caughtBy = data.caughtBy || null;
+      if (Array.isArray(data.territory)) rp.territory = new Set(data.territory);
+      else rp.territory = rp.territory || new Set();
+      rp.trail = Array.isArray(data.trail) ? data.trail : rp.trail || [];
+      if (data.newCells) {
+        data.newCells.forEach(cell => {
+          const [cx, cy] = cell.split(',').map(Number);
+          const flashX = (cx + 0.5) * territoryCellSize;
+          const flashY = (cy + 0.5) * territoryCellSize;
+          game.createFlash(flashX, flashY);
+        });
+      }
+      game.updateTopTerritories();
+    });
+
+    socket.on('playerDisconnect', (id) => {
+      if (game.player && game.player.cableTarget === id) {
+        game.player.cableActive = false;
+        game.player.cableTarget = null;
+        game.player.cableEndTime = 0;
+      }
+      if (game.player && game.player.caughtBy === id) {
+        game.player.caughtBy = null;
+        game.player.cableEndTime = 0;
+      }
+      delete remotePlayers[id];
+      game.updateTopTerritories();
+    });
+
+    socket.on('playerShoot', ({ id, data }) => {
+      if (id !== socket.id) game.projectiles.push(new Projectile(data.x, data.y, data.dx, data.dy, data.weaponType, data.shooterId));
+    });
+
+    socket.on('enemyState', (serverEnemies) => {
+      const updatedEnemies = [];
+      serverEnemies.forEach(eData => {
+        let existing = game.enemies.find(en => en.id === eData.id);
+        if (existing) {
+          existing.targetX = eData.x;
+          existing.targetY = eData.y;
+          existing.health = eData.health;
+          existing.maxHealth = eData.maxHealth;
+          existing.speed = eData.speed;
+          existing.type = eData.type;
+          updatedEnemies.push(existing);
+        } else {
+          const newEnemy = new Enemy(eData.x, eData.y, eData.type);
+          newEnemy.id = eData.id;
+          newEnemy.health = eData.health;
+          newEnemy.maxHealth = eData.maxHealth;
+          newEnemy.speed = eData.speed;
+          newEnemy.color = eData.color;
+          newEnemy.targetX = eData.x;
+          newEnemy.targetY = eData.y;
+          newEnemy.scale = 1;
+          updatedEnemies.push(newEnemy);
+        }
+      });
+      game.enemies = updatedEnemies;
+    });
+
+    socket.on('enemySpawn', (enemyData) => {
+      const newEnemy = new Enemy(enemyData.x, enemyData.y, enemyData.type);
+      newEnemy.id = enemyData.id;
+      newEnemy.health = enemyData.health;
+      newEnemy.maxHealth = enemyData.maxHealth;
+      newEnemy.speed = enemyData.speed;
+      newEnemy.color = enemyData.color;
+      newEnemy.targetX = enemyData.x;
+      newEnemy.targetY = enemyData.y;
+      newEnemy.scale = 0; // Start with scale animation
+      game.enemies.push(newEnemy);
+    });
+
+    socket.on('enemyDestroyed', (enemyId) => {
+      game.enemies = game.enemies.filter(e => e.id !== enemyId);
+    });
+
+    socket.on('enemyKilled', ({ enemyId, enemyType, x, y, playerId }) => {
+      if (playerId === socket.id) {
+        const scoreValues = { basic: 10, fast: 15, tank: 25, miniBoss: 100, boss: 200 };
+        const scoreIncrement = scoreValues[enemyType] || 10;
+        game.score += scoreIncrement;
+        game.enemiesDefeated++;
+        socket.emit('expandTerritory', { enemyType });
+        game.createExplosion(x, y);
+        game.soundManager.enemyDeath();
+        const now = Date.now();
+        if (now - game.lastKillTime < 2000) {
+          game.comboCounter++;
+          game.score += game.comboCounter * 5;
+        } else game.comboCounter = 0;
+        game.lastKillTime = now;
+        document.getElementById('comboCounter').textContent = game.comboCounter > 0 ? `${game.comboCounter}x COMBO!` : '';
+        document.getElementById('scoreValue').textContent = game.score;
+        if (Math.random() < 0.2) game.powerups.push(new Powerup(x, y));
+      }
+    });
+
+    socket.on('playerCableCatch', (data) => {
+      const caughtTime = 15000; // 15 seconds
+      if (remotePlayers[data.catcherId]) {
+        remotePlayers[data.catcherId].cableActive = true;
+        remotePlayers[data.catcherId].cableTarget = data.caughtId;
+        remotePlayers[data.catcherId].cableEndTime = Date.now() + caughtTime;
+      }
+      if (remotePlayers[data.caughtId]) {
+        remotePlayers[data.caughtId].caughtBy = data.catcherId;
+        remotePlayers[data.caughtId].cableEndTime = Date.now() + caughtTime;
+      }
+      if (game.player) {
+        if (game.player.id === data.catcherId) {
+          game.player.cableActive = true;
+          game.player.cableTarget = data.caughtId;
+          game.player.cableEndTime = Date.now() + caughtTime;
+        }
+        if (game.player.id === data.caughtId) {
+          game.player.caughtBy = data.catcherId;
+          game.player.cableEndTime = Date.now() + caughtTime;
+          const catcher = remotePlayers[data.catcherId] || (game.player.id === data.catcherId ? game.player : null);
+          if (catcher) {
+            game.player.cableOffset = { x: game.player.x - catcher.x, y: game.player.y - catcher.y };
+          }
+        }
+      }
+    });
+
+    socket.on('colorTaken', () => {
+      document.getElementById('colorMessage').textContent = 'Color is already taken, please choose another.';
+    });
+
+    socket.on('colorAccepted', (data) => {
+      playerColor = document.getElementById('colorPicker').value;
+      game.player = new Player(game.canvas, playerColor);
+      game.player.x = data.x; // Set server-assigned position
+      game.player.y = data.y;
+      const initialCell = `${Math.floor(data.x / territoryCellSize)},${Math.floor(data.y / territoryCellSize)}`;
+      game.player.territory.add(initialCell); // Initialize with spawn cell
+      game.init();
+      game.animationId = requestAnimationFrame(gameLoop);
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('shopButton').style.display = 'block';
+    });
+
+    socket.on('territoryPenalty', (data) => {
+      if (game.player) {
+        game.player.territory = new Set(data.territory);
+        game.player.trail = data.trail;
+        game.updateTopTerritories();
+      }
+    });
+
+    function gameLoop() {
+      game.update();
+      game.draw();
+      game.animationId = requestAnimationFrame(gameLoop);
+    }
+
+    Game.prototype.updateTopTerritories = function() {
+      const allPlayers = [];
+      if (this.player && this.player.territory) {
+        allPlayers.push({ id: socket.id, territory: this.player.territory.size, color: this.player.color });
+      }
+      Object.entries(remotePlayers).forEach(([id, rp]) => {
+        if (rp.territory) allPlayers.push({ id, territory: rp.territory.size, color: rp.color });
+      });
+      const totalCells = (this.worldWidth / territoryCellSize) * (this.worldHeight / territoryCellSize);
+      const percentages = allPlayers.map(p => ({
+        id: p.id,
+        percentage: (p.territory / totalCells * 100).toFixed(2),
+        color: p.color
+      }));
+      percentages.sort((a, b) => b.percentage - a.percentage);
+      const top3 = percentages.slice(0, 3);
+      document.getElementById('topTerritories').innerHTML = top3
+        .map(p => `<span style="background-color: ${p.color}; width: 10px; height: 10px; display: inline-block; margin-right: 5px;"></span> Player ${p.id.substring(0,5)} (${p.percentage}%)`)
+        .join('<br>');
+    };
+
+    let game = new Game();
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      document.getElementById('controls').style.display = 'none';
+      document.getElementById('mobileControls').style.display = 'block';
+    }
+  </script>
+</body>
+</html>
